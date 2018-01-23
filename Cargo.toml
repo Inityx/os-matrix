@@ -1,0 +1,7 @@
+[package]
+name = "os-matrix"
+version = "0.1.0"
+authors = ["Andrew Tolvstad <CTGBandy@gmail.com>"]
+
+[dependencies]
+num = "0.1"
