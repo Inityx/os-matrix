@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use ::num_traits::cast::AsPrimitive;
+
 use ::std::iter::Sum;
 use ::std::ops::{Add, Mul, Div};
 use ::std::str::FromStr;
@@ -7,32 +9,35 @@ use ::std::fmt;
 
 #[derive(Debug)]
 pub struct Error(String);
-impl Error {
-    fn new(string: &str) -> Error { Error(String::from(string)) }
-}
+
+impl Error { fn new(string: &str) -> Error { Error(String::from(string)) } }
+
 impl ::std::error::Error for Error {
     fn description(&self) -> &str { self.0.as_str() }
     fn cause(&self) -> Option<&::std::error::Error> { None }
 }
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-pub trait FromUsizeNoReally { fn from_usize(source: usize) -> Self; }
-
-impl FromUsizeNoReally for i32 {
-    fn from_usize(source: usize) -> Self { source as i32 }
-}
-
 pub trait Matrixable:
-    Default + Clone + FromUsizeNoReally +
-    Mul<Output=Self> + Div<Output=Self> + Add<Output=Self> + Sum {}
+    Default +
+    Copy +
+    Mul<Output=Self> +
+    Div<Output=Self> +
+    Add<Output=Self> +
+    Sum {}
 
 impl<T:
-    Default + Clone + FromUsizeNoReally +
-    Mul<Output=Self> + Div<Output=Self> + Add<Output=Self> + Sum
+    Default +
+    Copy +
+    Mul<Output=Self> +
+    Div<Output=Self> +
+    Add<Output=Self> +
+    Sum
 > Matrixable for T {}
 
 #[derive(Default)]
@@ -93,28 +98,7 @@ impl<T: Matrixable> Matrix<T> {
             data: new_data,
         }
     }
-    pub fn add(&self, rhs: &Self) -> Result<Self, Error> {
-        if self.num_rows != rhs.num_rows || self.num_cols != rhs.num_cols {
-            return Err(Error::new(&format!(
-                "Incompatible dimensions ({}x{} vs. {}x{})",
-                self.num_rows, self.num_cols,
-                rhs.num_rows, rhs.num_cols,
-            )));
-        }
-
-        let added_data: Vec<T> = self
-            .data.iter().cloned()
-            .zip(rhs.data.iter().cloned())
-            .map(|(lhs, rhs)| lhs.add(rhs))
-            .collect();
-        
-        Ok(Self {
-            num_rows: self.num_rows,
-            num_cols: self.num_cols,
-            data: added_data
-        })
-    }
-    pub fn dot(&self, rhs: &Self) -> Result<Self, Error> {
+    pub fn dot(self, rhs: Self) -> Result<Self, Error> {
         if self.num_cols != rhs.num_rows {
             return Err(Error::new(&format!(
                 "Incompatible dimensions ({} != {})",
@@ -141,13 +125,49 @@ impl<T: Matrixable> Matrix<T> {
             data: new_data
         })
     }
+    
+}
+
+impl<T: Matrixable + AsPrimitive<isize>> Matrix<T> where isize: AsPrimitive<T> {
     pub fn column_means(&self) -> Vec<T> {
         self
             .transpose()
             .rows()
-            .map(|row| (row.iter().cloned(), T::from_usize(row.len())) )
-            .map(|(iter, len)| iter.sum::<T>() / len )
-            .collect()
+            .map(|row| {
+                let sum: isize = row
+                    .iter()
+                    .cloned()
+                    .map(AsPrimitive::<isize>::as_)
+                    .sum();
+                AsPrimitive::<T>::as_(sum / row.len() as isize)
+            })
+            .collect::<Vec<T>>()
+    }
+}
+
+impl<T: Matrixable> Add for Matrix<T> {
+    type Output=Result<Self, Error>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if self.num_rows != rhs.num_rows || self.num_cols != rhs.num_cols {
+            return Err(Error::new(&format!(
+                "Incompatible dimensions ({}x{} vs. {}x{})",
+                self.num_rows, self.num_cols,
+                rhs.num_rows, rhs.num_cols,
+            )));
+        }
+
+        let added_data: Vec<T> = self
+            .data.iter().cloned()
+            .zip(rhs.data.iter().cloned())
+            .map(|(lhs, rhs)| lhs.add(rhs))
+            .collect();
+        
+        Ok(Self {
+            num_rows: self.num_rows,
+            num_cols: self.num_cols,
+            data: added_data
+        })
     }
 }
 
@@ -155,13 +175,12 @@ impl<T: Matrixable + ToString> fmt::Display for Matrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self
             .rows()
-            .map(|row|
-                row
-                    .iter()
-                    .map(T::to_string)
-                    .collect::<Vec<String>>()
-                    .as_slice()
-                    .join("\t")
+            .map(|row| row
+                .iter()
+                .map(T::to_string)
+                .collect::<Vec<String>>()
+                .as_slice()
+                .join("\t")
             )
             .map(|string| write!(f, "{}\n", string) )
             .collect::<Result<_, _>>()

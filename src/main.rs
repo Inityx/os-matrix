@@ -1,4 +1,4 @@
-extern crate num;
+extern crate num_traits;
 
 mod matrix;
 
@@ -31,13 +31,27 @@ fn matrix_from_file<P: AsRef<Path>>(path: P) -> Result<Matrix> {
     contents.parse::<Matrix>()
 }
 
-fn vec_format(vector: &Vec<NumberType>) -> String {
-    vector
-        .iter()
-        .map(NumberType::to_string)
-        .collect::<Vec<String>>()
-        .as_slice()
-        .join("\t")
+fn print_add(m1: Matrix, m2: Matrix) { println!("{}", (m1 + m2).unwrap()); }
+fn print_dot(m1: Matrix, m2: Matrix) { println!("{}", m1.dot(m2).unwrap()); }
+
+fn print_transpose(matrix: Matrix) { println!("{}", matrix); }
+
+fn print_dims(matrix: Matrix) {
+    let (rows, cols) = matrix.dims();
+    println!("{} {}", rows, cols);
+}
+
+fn print_means(matrix: Matrix) {
+    println!(
+        "{}",
+        matrix
+            .column_means()
+            .iter()
+            .map(NumberType::to_string)
+            .collect::<Vec<String>>()
+            .as_slice()
+            .join("\t")
+    );
 }
 
 fn main() {
@@ -55,14 +69,14 @@ fn main() {
         .map(|result| result.expect("Error parsing matrix 2"));
 
     match mode.as_str() {
-        "dims"             => println!("{} {}", matrix_1.dims().0, matrix_1.dims().1),
-        "transpose"        => println!("{}", matrix_1.transpose()),
-        "mean"             => println!("{}", vec_format(&matrix_1.column_means())),
+        "dims"             => print_dims(matrix_1),
+        "transpose"        => print_transpose(matrix_1),
+        "mean"             => print_means(matrix_1),
         "add" | "multiply" => {
             let matrix_2 = matrix_2_option.expect("Matrix 2 not provided");
             match mode.as_str() {
-                "add"      => println!("{}", matrix_1.add(&matrix_2).unwrap()),
-                "multiply" => println!("{}", matrix_1.dot(&matrix_2).unwrap()),
+                "add"      => print_add(matrix_1, matrix_2),
+                "multiply" => print_dot(matrix_1, matrix_2),
                 _          => unreachable!(),
             };
         },
